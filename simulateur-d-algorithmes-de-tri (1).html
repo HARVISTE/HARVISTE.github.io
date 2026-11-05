@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simulateur d'algorithmes de tri</title>
+<style>
+  :root {
+    font-family: system-ui, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .subtitle { color: #94a3b8; margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    width: 100%; max-width: 860px; background: #1e293b; border-radius: 14px;
+    padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  #bars {
+    display: flex; align-items: flex-end; gap: 2px; height: 300px;
+    background: #0f172a; border-radius: 10px; padding: 12px;
+  }
+  .bar { flex: 1; border-radius: 4px 4px 0 0; background: #38bdf8; transition: height .12s; position: relative; }
+  .bar.compare { background: #fbbf24; }
+  .bar.swap { background: #f87171; }
+  .bar.sorted { background: #4ade80; }
+  .bar .val {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: #94a3b8;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; justify-content: center; }
+  button {
+    background: #38bdf8; color: #0f172a; border: none; border-radius: 8px;
+    padding: 9px 16px; font-weight: 600; cursor: pointer; font-size: .9rem;
+  }
+  button:hover { background: #7dd3fc; }
+  button.ghost { background: transparent; color: #38bdf8; border: 1px solid #38bdf8; }
+  button.ghost:hover { background: rgba(56,189,248,.15); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: #94a3b8; }
+  select, input[type=range] { accent-color: #38bdf8; }
+  select { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; }
+  .stats { margin-top: 12px; display: flex; gap: 18px; justify-content: center; font-size: .85rem; color: #94a3b8; flex-wrap: wrap; }
+  .stats b { color: #e2e8f0; }
+  .legend { margin-top: 10px; display: flex; gap: 14px; justify-content: center; font-size: .78rem; color: #94a3b8; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+  .note { margin-top: 16px; max-width: 860px; font-size: .82rem; color: #64748b; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <h1>🫧 Simulateur d'algorithmes de tri</h1>
+  <p class="subtitle">Visualise le tri à bulles (bubble sort), le tri par sélection et le tri par insertion, étape par étape.</p>
+
+  <div class="panel">
+    <div id="bars"></div>
+    <div class="controls">
+      <label>Algorithme
+        <select id="algo">
+          <option value="bubble">Tri à bulles</option>
+          <option value="selection">Tri par sélection</option>
+          <option value="insertion">Tri par insertion</option>
+        </select>
+      </label>
+      <label>Taille
+        <select id="size">
+          <option>10</option><option selected>16</option><option>24</option><option>32</option>
+        </select>
+      </label>
+      <label>Vitesse
+        <input type="range" id="speed" min="1" max="20" value="8" />
+      </label>
+      <button id="play">▶ Lancer</button>
+      <button id="step" class="ghost" disabled>Étape</button>
+      <button id="shuffle" class="ghost">Mélanger</button>
+    </div>
+    <div class="stats">
+      <span>Comparaisons : <b id="cmp">0</b></span>
+      <span>Échanges : <b id="swaps">0</b></span>
+      <span>État : <b id="state">Prêt</b></span>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#fbbf24"></span>Comparaison</span>
+      <span><span class="dot" style="background:#f87171"></span>Échange</span>
+      <span><span class="dot" style="background:#4ade80"></span>Trié</span>
+    </div>
+  </div>
+
+  <p class="note" id="note"></p>
+
+<script>
+  let arr = [], n = 16, playing = false, timer = null, gen = null;
+  const barsEl = document.getElementById('bars');
+  const cmpEl = document.getElementById('cmp'), swEl = document.getElementById('swaps');
+  const stateEl = document.getElementById('state');
+  const playBtn = document.getElementById('play'), stepBtn = document.getElementById('step');
+  let cmp = 0, swaps = 0;
+
+  function randomArray() {
+    arr = Array.from({ length: n }, () => 5 + Math.floor(Math.random() * 95));
+  }
+
+  function render(hi = [], swapping = [], sorted = []) {
+    barsEl.innerHTML = '';
+    arr.forEach((v, i) => {
+      const d = document.createElement('div');
+      d.className = 'bar';
+      if (hi.includes(i)) d.classList.add('compare');
+      if (swapping.includes(i)) d.classList.add('swap');
+      if (sorted.includes(i)) d.classList.add('sorted');
+      d.style.height = v + '%';
+      if (n <= 24) {
+        const s = document.createElement('span');
+        s.className = 'val'; s.textContent = v;
+        d.appendChild(s);
+      }
+      barsEl.appendChild(d);
+    });
+    cmpEl.textContent = cmp; swEl.textContent = swaps;
+  }
+
+  function reset(keepData) {
+    stop();
+    cmp = 0; swaps = 0;
+    if (!keepData) randomArray();
+    gen = makeGenerator(document.getElementById('algo').value);
+    stateEl.textContent = 'Prêt';
+    render();
+    stepBtn.disabled = false;
+  }
+
+  function stop() {
+    playing = false;
+    if (timer) { clearTimeout(timer); timer = null; }
+    playBtn.textContent = '▶ Lancer';
+  }
+
+  function delay() {
+    const s = +document.getElementById('speed').value;
+    return 620 / s;
+  }
+
+  // --- Générateurs : yield {hi, swap, sorted} à chaque étape ---
+  function* bubble(a) {
+    const sorted = [];
+    for (let i = 0; i < a.length - 1; i++) {
+      let swapped = false;
+      for (let j = 0; j < a.length - 1 - i; j++) {
+        cmp++;
+        yield { hi: [j, j + 1], swap: [], sorted };
+        if (a[j] > a[j + 1]) {
+          [a[j], a[j + 1]] = [a[j + 1], a[j]];
+          swaps++; swapped = true;
+          yield { hi: [], swap: [j, j + 1], sorted };
+        }
+      }
+      sorted.push(a.length - 1 - i);
+      if (!swapped) { for (let k = 0; k < a.length; k++) sorted.push(k); return; }
+    }
+    sorted.push(0);
+  }
+
+  function* selection(a) {
+    const sorted = [];
+    for (let i = 0; i < a.length - 1; i++) {
+      let min = i;
+      for (let j = i + 1; j < a.length; j++) {
+        cmp++;
+        yield { hi: [min, j], swap: [], sorted };
+        if (a[j] < a[min]) min = j;
+      }
+      if (min !== i) {
+        [a[i], a[min]] = [a[min], a[i]];
+        swaps++;
+        yield { hi: [], swap: [i, min], sorted };
+      }
+      sorted.push(i);
+    }
+    sorted.push(a.length - 1);
+  }
+
+  function* insertion(a) {
+    const sorted = [0];
+    for (let i = 1; i < a.length; i++) {
+      let j = i;
+      while (j > 0) {
+        cmp++;
+        yield { hi: [j - 1, j], swap: [], sorted };
+        if (a[j] < a[j - 1]) {
+          [a[j], a[j - 1]] = [a[j - 1], a[j]];
+          swaps++; j--;
+          yield { hi: [], swap: [j, j + 1], sorted };
+        } else break;
+      }
+      sorted.push(i);
+    }
+  }
+
+  const notes = {
+    bubble: "<b>Tri à bulles (bubble sort)</b> : on parcourt le tableau et on compare les éléments voisins deux à deux ; s'ils sont mal ordonnés, on les échange. À chaque passage, le plus grand élément « remonte comme une bulle » vers la fin. Complexité : O(n²) en moyenne, O(n) si le tableau est déjà trié (grâce au test d'arrêt anticipé).",
+    selection: "<b>Tri par sélection</b> : on cherche le plus petit élément de la partie non triée et on le place au début, puis on recommence avec le reste. Très peu d'échanges (n-1 au maximum), mais toujours O(n²) comparaisons, même si le tableau est déjà trié.",
+    insertion: "<b>Tri par insertion</b> : comme un jeu de cartes en main — on prend chaque nouvel élément et on l'insère à sa place parmi ceux déjà triés. O(n²) en moyenne, mais O(n) sur un tableau presque trié : c'est le plus rapide des trois en pratique."
+  };
+  function updateNote() {
+    document.getElementById('note').innerHTML = notes[document.getElementById('algo').value];
+  }
+
+  function makeGenerator(algo) {
+    const f = { bubble, selection, insertion }[algo];
+    return f(arr);
+  }
+
+  function step() {
+    const r = gen.next();
+    if (r.done) {
+      render([], [], arr.map((_, i) => i));
+      stateEl.textContent = '✅ Trié !';
+      stop(); stepBtn.disabled = true;
+      return false;
+    }
+    const s = r.value;
+    render(s.hi, s.swap, s.sorted);
+    stateEl.textContent = playing ? 'En cours…' : 'En pause';
+    return true;
+  }
+
+  function loop() {
+    if (!playing) return;
+    if (step()) timer = setTimeout(loop, delay());
+  }
+
+  playBtn.onclick = () => {
+    if (playing) { stop(); stateEl.textContent = 'En pause'; return; }
+    playing = true;
+    playBtn.textContent = '⏸ Pause';
+    loop();
+  };
+  stepBtn.onclick = () => { stop(); stateEl.textContent = 'Manuel'; step(); };
+
+  document.getElementById('shuffle').onclick = () => { n = +document.getElementById('size').value; reset(false); };
+  document.getElementById('size').onchange = () => { n = +document.getElementById('size').value; reset(false); };
+  document.getElementById('algo').onchange = () => { reset(true); updateNote(); };
+
+  n = +document.getElementById('size').value;
+  updateNote();
+  reset(false);
+</script>
+</body>
+</html>
